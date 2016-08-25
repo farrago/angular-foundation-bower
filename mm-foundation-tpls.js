@@ -1,8 +1,8 @@
 /*
  * angular-mm-foundation
- * http://pineconellc.github.io/angular-foundation/
+ * https://github.com/farrago/angular-foundation-bower
 
- * Version: 0.8.0 - 2015-10-13
+ * Version: 0.8.0-csp.1 - 2016-08-25
  * License: MIT
  * (c) Pinecone, LLC
  */
@@ -958,13 +958,21 @@ angular.module('mm.foundation.modal', ['mm.foundation.transition'])
       restrict: 'EA',
       scope: {
         index: '@',
-        animate: '='
+        animate: '=',
+        mmTop: '@'
       },
       replace: true,
       transclude: true,
       templateUrl: 'template/modal/window.html',
       link: function (scope, element, attrs) {
         scope.windowClass = attrs.windowClass || '';
+
+        // Set the `top` style using element.css to avoid Content Security Policy
+        // issues when using inline-styles
+        if (scope.mmTop) {
+          element.css('top', scope.mmTop);
+          element.css('visibility', 'visible');
+        }
 
         $timeout(function () {
           // trigger CSS transitions
@@ -1111,18 +1119,21 @@ angular.module('mm.foundation.modal', ['mm.foundation.transition'])
         }
 
         // Create a faux modal div just to measure its
-        // distance to top
-        var faux = angular.element('<div class="reveal-modal" style="z-index:-1""></div>');
+        // distance to top. Note that we set the style using element.css()
+        // rather than using inline style="..." to avoid issue with Content Security Policy
+        var faux = angular.element('<div class="reveal-modal"></div>');
+        faux.css("z-index", "-1");
         parent.append(faux[0]);
         cssTop = parseInt($window.getComputedStyle(faux[0]).top) || 0;
         var openAt = calculateModalTop(faux, cssTop);
         faux.remove();
 
-        var angularDomEl = angular.element('<div modal-window style="visibility: visible; top:' + openAt +'px;"></div>')
+        var angularDomEl = angular.element('<div modal-window></div>')
           .attr({
             'window-class': modal.windowClass,
             'index': openedWindows.length() - 1,
-            'animate': 'animate'
+            'animate': 'animate',
+            'mm-top': '' + openAt + 'px' // Pass the top position to modal-window directive
           });
         angularDomEl.html(modal.content);
 
@@ -2757,8 +2768,8 @@ angular.module("mm.foundation.topbar", ['mm.foundation.mediaQueries'])
         angular.element($window).bind('scroll', onScroll);
 
         scope.$on('$destroy', function() {
-          angular.element($window).unbind('scroll', onResize);
-          angular.element($window).unbind('resize', onScroll);
+          angular.element($window).unbind('resize', onResize);
+          angular.element($window).unbind('scroll', onScroll);
         });
 
         if (topbarContainer.hasClass('fixed')) {
@@ -3116,6 +3127,8 @@ angular.module('mm.foundation.typeahead', ['mm.foundation.position', 'mm.foundat
 
       var appendToBody =  attrs.typeaheadAppendToBody ? $parse(attrs.typeaheadAppendToBody) : false;
 
+      var focusFirst = originalScope.$eval(attrs.typeaheadFocusFirst) !== false;
+
       //INTERNAL VARIABLES
 
       //model setter executed upon match selection
@@ -3163,7 +3176,7 @@ angular.module('mm.foundation.typeahead', ['mm.foundation.position', 'mm.foundat
           if (inputValue === modelCtrl.$viewValue && hasFocus) {
             if (matches.length > 0) {
 
-              scope.activeIdx = 0;
+              scope.activeIdx = focusFirst ? 0 : -1;
               scope.matches.length = 0;
 
               //transform labels
@@ -3288,6 +3301,11 @@ angular.module('mm.foundation.typeahead', ['mm.foundation.position', 'mm.foundat
           return;
         }
 
+        // if there's nothing selected (i.e. focusFirst) and enter is hit, don't do anything
+        if (scope.activeIdx == -1 && (evt.which === 13 || evt.which === 9)) {
+          return;
+        }
+
         evt.preventDefault();
 
         if (evt.which === 40) {
@@ -3295,7 +3313,7 @@ angular.module('mm.foundation.typeahead', ['mm.foundation.position', 'mm.foundat
           scope.$digest();
 
         } else if (evt.which === 38) {
-          scope.activeIdx = (scope.activeIdx ? scope.activeIdx : scope.matches.length) - 1;
+          scope.activeIdx = (scope.activeIdx > 0 ? scope.activeIdx : scope.matches.length) - 1;
           scope.$digest();
 
         } else if (evt.which === 13 || evt.which === 9) {
